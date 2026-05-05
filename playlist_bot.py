@@ -50,7 +50,7 @@ def get_spotify_token():
 
 def get_playlist_tracks(token):
     tracks = {}
-    url = f"https://api.spotify.com/v1/playlists/{SPOTIFY_PLAYLIST_ID}/tracks"
+    url = f"https://api.spotify.com/v1/playlists/{SPOTIFY_PLAYLIST_ID}/items"
     headers = {"Authorization": f"Bearer {token}"}
     print(f"  Fetching: {url}")
     while url:
