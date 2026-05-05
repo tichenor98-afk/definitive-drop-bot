@@ -4,7 +4,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-# ── CONFIG (set these as environment variables on Railway) ───────────────────
+# ── CONFIG ───────────────────────────────────────────────────────────────────
 SPOTIFY_CLIENT_ID     = os.environ.get("SPOTIFY_CLIENT_ID",     "962dc26019874f8781de1a133e126d9b")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "48a2c83b38ca4ee8b25fe71c05e7b211")
 SPOTIFY_PLAYLIST_ID   = os.environ.get("SPOTIFY_PLAYLIST_ID",   "5Prn6P7pbsnLnzeWE3q7wS")
@@ -12,18 +12,20 @@ DISCORD_BOT_TOKEN     = os.environ.get("DISCORD_BOT_TOKEN",     "PASTE_YOUR_BOT_
 FORUM_CHANNEL_ID      = os.environ.get("FORUM_CHANNEL_ID",      "1499885742095208599")
 UPDATES_CHANNEL_ID    = os.environ.get("UPDATES_CHANNEL_ID",    "1501346456852758669")
 
-CHECK_INTERVAL = 600  # seconds between checks (10 minutes)
+CHECK_INTERVAL = 600
 STATE_FILE     = "playlist_state.json"
 TOKEN_FILE     = "spotify_token.json"
-# ────────────────────────────────────────────────────────────────────────────
-
-# ── SPOTIFY OAuth ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_spotify_token():
-    """Get a fresh access token using the stored refresh token."""
+    print(f"  Looking for token file at: {os.path.abspath(TOKEN_FILE)}")
+    print(f"  Token file exists: {os.path.exists(TOKEN_FILE)}")
+    print(f"  Files in current dir: {os.listdir('.')}")
+
     with open(TOKEN_FILE) as f:
         data = json.load(f)
     refresh_token = data["refresh_token"]
+    print(f"  Refresh token found (first 10 chars): {refresh_token[:10]}...")
 
     r = requests.post(
         "https://accounts.spotify.com/api/token",
@@ -34,10 +36,11 @@ def get_spotify_token():
         auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
     )
     result = r.json()
+    print(f"  Token response keys: {list(result.keys())}")
+
     if "access_token" not in result:
         raise Exception(f"Spotify token refresh error: {result}")
 
-    # If Spotify issues a new refresh token, save it
     if "refresh_token" in result:
         data["refresh_token"] = result["refresh_token"]
         with open(TOKEN_FILE, "w") as f:
@@ -49,8 +52,10 @@ def get_playlist_tracks(token):
     tracks = {}
     url = f"https://api.spotify.com/v1/playlists/{SPOTIFY_PLAYLIST_ID}/tracks"
     headers = {"Authorization": f"Bearer {token}"}
+    print(f"  Fetching: {url}")
     while url:
         r = requests.get(url, headers=headers)
+        print(f"  Response status: {r.status_code}")
         data = r.json()
         if "error" in data:
             raise Exception(f"Spotify API error: {data['error']}")
@@ -70,8 +75,6 @@ def get_playlist_tracks(token):
         url = data.get("next")
     return tracks
 
-# ── STATE ─────────────────────────────────────────────────────────────────────
-
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
@@ -81,8 +84,6 @@ def load_state():
 def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
-
-# ── DISCORD ───────────────────────────────────────────────────────────────────
 
 def discord_headers():
     return {
@@ -119,8 +120,6 @@ def post_thread_message(thread_id, content):
     )
     if r.status_code not in (200, 201):
         print(f"  Thread message error {r.status_code}: {r.text}")
-
-# ── MAIN LOOP ─────────────────────────────────────────────────────────────────
 
 def check_for_changes():
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Checking playlist...")
