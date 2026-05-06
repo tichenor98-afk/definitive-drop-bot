@@ -13,7 +13,7 @@ FORUM_CHANNEL_ID      = os.environ.get("FORUM_CHANNEL_ID",      "149988574209520
 UPDATES_CHANNEL_ID    = os.environ.get("UPDATES_CHANNEL_ID",    "1501346456852758669")
 
 CHECK_INTERVAL = 600
-STATE_FILE     = "playlist_state.json"
+STATE_FILE     = "playlist_state_v2.json"
 TOKEN_FILE     = "spotify_token.json"
 # ─────────────────────────────────────────────────────────────────────────────
 
