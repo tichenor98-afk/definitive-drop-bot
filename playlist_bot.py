@@ -44,7 +44,10 @@ def get_playlist_tracks(token):
     headers = {"Authorization": f"Bearer {token}"}
     while url:
         r = requests.get(url, headers=headers)
+        print(f"  Spotify status: {r.status_code}")
         data = r.json()
+        print(f"  Spotify keys: {list(data.keys())}")
+        print(f"  Items count: {len(data.get('items', []))}")
         if "error" in data:
             raise Exception(f"Spotify error: {data['error']}")
         for item in data.get("items", []):
