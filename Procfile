@@ -1,1 +1,1 @@
-worker: python playlist_bot.py
+worker: python bot.py
