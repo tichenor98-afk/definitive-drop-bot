@@ -1,87 +1,65 @@
 """
 user_lookup.py
-Fetches the Spotify ID -> Display Name mapping from a public Google Sheet.
-Refreshes the cache periodically so new users show up without redeploying.
+
+Maps Spotify user IDs to display names.
+
+HOW TO ADD A NEW USER:
+1. Get their Spotify user ID (it appears in bot-alerts when they add a song)
+2. Add a new line to USER_MAP below in the format:
+       "their_spotify_id": "Their Display Name",
+3. Save and upload user_lookup.py to GitHub
+4. Railway will redeploy automatically within a minute
+
+No other changes needed.
 """
 
-import csv
-import io
 import logging
-import time
-import requests
 
 log = logging.getLogger("users")
 
-CACHE_TTL = 3600  # refresh user list every hour
+# ── User map: Spotify ID -> Display Name ──────────────────────────────────────
+# Add new users here when they join the playlist.
+USER_MAP = {
+    "1244544596":                    "Kimberly DeLiz",
+    "nbd69oy9yijanj8zyj9uuioub":     "MHT",
+    "tichenor.tichenor":             "Colette Tichenor",
+    "31pght73z6jbr7yxnbveogsceyzi":  "Christopher Tichenor",
+    "31j6esa7qom5yvr5htfvolixk6mu":  "Brett Szudy",
+    "1246961212":                    "Scott Tichenor",
+    "1214967802":                    "Dennis McNulty",
+    "d-roka":                        "Dennis Hartman",
+}
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 class UserLookup:
-    def __init__(self, sheet_csv_url):
-        self.sheet_csv_url = sheet_csv_url
-        self._cache        = {}
-        self._cache_time   = 0
-
-    def _fetch(self):
-        """Fetch the Google Sheet as CSV and parse it."""
-        try:
-            r = requests.get(self.sheet_csv_url, timeout=10)
-            r.raise_for_status()
-            reader = csv.DictReader(io.StringIO(r.text))
-            new_cache = {}
-            for row in reader:
-                spotify_id   = row.get("Spotify ID", "").strip()
-                display_name = row.get("Display Name", "").strip()
-                if spotify_id and display_name:
-                    new_cache[spotify_id] = display_name
-            log.info(f"User lookup refreshed: {len(new_cache)} users loaded.")
-            for uid, name in new_cache.items():
-                log.info(f"  {uid} -> {name}")
-            return new_cache
-        except Exception as e:
-            log.warning(f"Failed to fetch user lookup sheet: {e}")
-            return None
-
-    def _ensure_cache(self):
-        """Ensure the cache is populated and fresh."""
-        now = time.time()
-        if now - self._cache_time > CACHE_TTL or not self._cache:
-            new_cache = self._fetch()
-            if new_cache is not None:
-                self._cache      = new_cache
-                self._cache_time = now
-            elif not self._cache:
-                log.warning("User lookup cache is empty and fetch failed.")
+    def __init__(self, sheet_csv_url=None):
+        # sheet_csv_url kept for API compatibility but not used
+        # User data is hardcoded above for reliability
+        log.info(f"User lookup initialized with {len(USER_MAP)} users.")
+        for uid, name in USER_MAP.items():
+            log.info(f"  {uid} -> {name}")
 
     def get_name(self, spotify_id):
         """
         Look up a Spotify user ID and return their display name.
         Returns the display name, or the raw ID if not found.
-        Always ensures cache is populated before lookup.
         """
         if not spotify_id:
             return "Unknown"
 
-        self._ensure_cache()
-
-        # Clean the ID (remove spotify:user: prefix if present)
         clean_id = spotify_id.replace("spotify:user:", "").strip()
-        name = self._cache.get(clean_id)
+        name = USER_MAP.get(clean_id)
 
         if name:
             return name
 
-        log.warning(f"User ID not found in lookup: '{clean_id}'")
+        log.warning(f"User ID not in USER_MAP: '{clean_id}'")
         return clean_id
 
     def is_unknown(self, spotify_id):
-        """
-        Returns True if this user ID is not in the lookup table.
-        Always ensures cache is populated before checking.
-        """
+        """Returns True if this user ID is not in USER_MAP."""
         if not spotify_id:
             return True
-
-        self._ensure_cache()
-
         clean_id = spotify_id.replace("spotify:user:", "").strip()
-        return clean_id not in self._cache
+        return clean_id not in USER_MAP
