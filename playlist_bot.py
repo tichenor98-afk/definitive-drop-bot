@@ -115,6 +115,11 @@ def check_for_changes():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking playlist...")
     token  = get_spotify_token()
     tracks = get_playlist_tracks(token)
+
+    if len(tracks) < 10:
+        print(f"  WARNING: Spotify returned only {len(tracks)} tracks. Skipping to avoid false removals.")
+        return
+
     state  = load_state()
 
     if state is None:
