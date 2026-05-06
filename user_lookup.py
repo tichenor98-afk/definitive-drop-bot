@@ -33,30 +33,55 @@ class UserLookup:
                 display_name = row.get("Display Name", "").strip()
                 if spotify_id and display_name:
                     new_cache[spotify_id] = display_name
-            log.info(f"User lookup refreshed: {len(new_cache)} users.")
+            log.info(f"User lookup refreshed: {len(new_cache)} users loaded.")
+            for uid, name in new_cache.items():
+                log.info(f"  {uid} -> {name}")
             return new_cache
         except Exception as e:
             log.warning(f"Failed to fetch user lookup sheet: {e}")
             return None
 
-    def get_name(self, spotify_id):
-        """
-        Look up a Spotify user ID and return their display name.
-        Returns the display name, or the raw ID if not found.
-        Refreshes the cache if it's stale.
-        """
+    def _ensure_cache(self):
+        """Ensure the cache is populated and fresh."""
         now = time.time()
-        if now - self._cache_time > CACHE_TTL:
+        if now - self._cache_time > CACHE_TTL or not self._cache:
             new_cache = self._fetch()
             if new_cache is not None:
                 self._cache      = new_cache
                 self._cache_time = now
+            elif not self._cache:
+                log.warning("User lookup cache is empty and fetch failed.")
+
+    def get_name(self, spotify_id):
+        """
+        Look up a Spotify user ID and return their display name.
+        Returns the display name, or the raw ID if not found.
+        Always ensures cache is populated before lookup.
+        """
+        if not spotify_id:
+            return "Unknown"
+
+        self._ensure_cache()
 
         # Clean the ID (remove spotify:user: prefix if present)
         clean_id = spotify_id.replace("spotify:user:", "").strip()
-        return self._cache.get(clean_id, clean_id)
+        name = self._cache.get(clean_id)
+
+        if name:
+            return name
+
+        log.warning(f"User ID not found in lookup: '{clean_id}'")
+        return clean_id
 
     def is_unknown(self, spotify_id):
-        """Returns True if this user ID is not in the lookup table."""
+        """
+        Returns True if this user ID is not in the lookup table.
+        Always ensures cache is populated before checking.
+        """
+        if not spotify_id:
+            return True
+
+        self._ensure_cache()
+
         clean_id = spotify_id.replace("spotify:user:", "").strip()
         return clean_id not in self._cache
