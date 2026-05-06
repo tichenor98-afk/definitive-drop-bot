@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 SPOTIFY_CLIENT_ID     = os.environ.get("SPOTIFY_CLIENT_ID",     "962dc26019874f8781de1a133e126d9b")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "48a2c83b38ca4ee8b25fe71c05e7b211")
 SPOTIFY_PLAYLIST_ID   = os.environ.get("SPOTIFY_PLAYLIST_ID",   "5Prn6P7pbsnLnzeWE3q7wS")
-DISCORD_BOT_TOKEN     = os.environ.get("DISCORD_BOT_TOKEN",     "PASTE_YOUR_BOT_TOKEN_HERE")
+DISCORD_BOT_TOKEN     = os.environ.get("DISCORD_BOT_TOKEN",     "MTQ5OTg4Nzg3NDU4NDIxOTc3OQ.GuP6jl.yepPTEuOKBL9o4xZBmEaUqwsqwPikWQ_UBvn_M")
 FORUM_CHANNEL_ID      = os.environ.get("FORUM_CHANNEL_ID",      "1499885742095208599")
 UPDATES_CHANNEL_ID    = os.environ.get("UPDATES_CHANNEL_ID",    "1501346456852758669")
 
