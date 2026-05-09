@@ -27,6 +27,7 @@ USER_MAP = {
     "31j6esa7qom5yvr5htfvolixk6mu":  "Brett Szudy",
     "1246961212":                    "Scott Tichenor",
     "1214967802":                    "Dennis McNulty",
+       "angelinamc99": "Angelina McNulty",
     "d-roka":                        "Dennis Hartman",
 }
 # ─────────────────────────────────────────────────────────────────────────────
