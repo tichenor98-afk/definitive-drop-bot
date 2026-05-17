@@ -329,6 +329,7 @@ def main():
             )
 
         # ── Activity scoring scan ─────────────────────────────────────────────
+        log.info(f"Scoring check: GUILD_ID={bool(GUILD_ID)}, time_since_scan={int(time.time() - last_score_scan)}s, interval={SCORE_SCAN_INTERVAL}s")
         if GUILD_ID and time.time() - last_score_scan > SCORE_SCAN_INTERVAL:
             try:
                 log.info("Scanning Discord activity for scoring...")
