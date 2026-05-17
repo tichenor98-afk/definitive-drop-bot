@@ -268,36 +268,35 @@ class ScoreScanner:
         return heart_reactor_ids, heart_count, heart_reactor_ids
 
     def get_forum_threads(self, channel_id):
-        """Get all active threads in a forum channel."""
-        threads = []
-        url = f"https://discord.com/api/v10/channels/{channel_id}/threads/search?limit=25"
-        while url:
-            data = self._get(url)
-            if not data:
-                break
-            batch = data.get("threads", [])
-            threads.extend(batch)
-            if data.get("has_more") and batch:
-                last_id = batch[-1]["id"]
-                url = f"https://discord.com/api/v10/channels/{channel_id}/threads/search?limit=25&before={last_id}"
-            else:
-                url = None
-            time.sleep(0.5)
+        """Get all unique threads in a forum channel with deduplication."""
+        threads  = []
+        seen_ids = set()
 
-        # Also get archived threads
-        url = f"https://discord.com/api/v10/channels/{channel_id}/threads/archived/public?limit=25"
-        while url:
-            data = self._get(url)
-            if not data:
-                break
-            batch = data.get("threads", [])
-            threads.extend(batch)
-            if data.get("has_more") and batch:
-                last_id = batch[-1]["id"]
-                url = f"https://discord.com/api/v10/channels/{channel_id}/threads/archived/public?limit=25&before={last_id}"
-            else:
-                url = None
-            time.sleep(0.5)
+        def fetch_pages(start_url):
+            url = start_url
+            while url:
+                data = self._get(url)
+                if not data:
+                    break
+                batch = data.get("threads", [])
+                new_batch = [t for t in batch if t["id"] not in seen_ids]
+                for t in new_batch:
+                    seen_ids.add(t["id"])
+                threads.extend(new_batch)
+                log.info(f"    Threads fetched: {len(threads)} unique (batch={len(batch)}, new={len(new_batch)})")
+                if not new_batch:
+                    log.info("    No new threads in batch — stopping pagination.")
+                    break
+                if data.get("has_more") and batch:
+                    last_id = batch[-1]["id"]
+                    base = url.split("?")[0]
+                    url = f"{base}?limit=25&before={last_id}"
+                else:
+                    url = None
+                time.sleep(0.5)
+
+        fetch_pages(f"https://discord.com/api/v10/channels/{channel_id}/threads/search?limit=25")
+        fetch_pages(f"https://discord.com/api/v10/channels/{channel_id}/threads/archived/public?limit=25")
 
         return threads
 
