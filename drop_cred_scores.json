@@ -1,0 +1,120 @@
+{
+  "Conrad Tichenor": {
+    "total": 8,
+    "weekly": 8,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 8
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "MHT": {
+    "total": 227,
+    "weekly": 227,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 88,
+      "heart_given": 6,
+      "comment": 92,
+      "heart_received": 9,
+      "song_added": 32
+    },
+    "badge": "\ud83d\udd25 Drop Dealer"
+  },
+  "Christopher Tichenor": {
+    "total": 56,
+    "weekly": 56,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 24,
+      "comment": 8,
+      "song_added": 24
+    },
+    "badge": "\ud83d\udcc0 Crate Digger"
+  },
+  "Dennis McNulty": {
+    "total": 197,
+    "weekly": 197,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 80,
+      "heart_received": 3,
+      "comment": 72,
+      "heart_given": 2,
+      "song_added": 40
+    },
+    "badge": "\ud83d\udcc0 Crate Digger"
+  },
+  "Brett Szudy": {
+    "total": 94,
+    "weekly": 94,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 8,
+      "comment": 58,
+      "heart_received": 12,
+      "song_added": 16
+    },
+    "badge": "\ud83d\udcc0 Crate Digger"
+  },
+  "Colette Tichenor": {
+    "total": 74,
+    "weekly": 74,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 24,
+      "heart_given": 2,
+      "comment": 16,
+      "song_added": 32
+    },
+    "badge": "\ud83d\udcc0 Crate Digger"
+  },
+  "Kimberly DeLiz": {
+    "total": 22,
+    "weekly": 22,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "challenge_posted": 8,
+      "heart_received": 6,
+      "comment": 8
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "Scott Tichenor": {
+    "total": 20,
+    "weekly": 20,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "comment": 12,
+      "song_added": 8
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "Michael McNulty": {
+    "total": 8,
+    "weekly": 8,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "song_added": 8
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "Zander Tichenor": {
+    "total": 8,
+    "weekly": 8,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "song_added": 8
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "Angelina McNulty": {
+    "total": 24,
+    "weekly": 24,
+    "week_start": "2026-05-11T00:00:00+00:00",
+    "breakdown": {
+      "song_added": 24
+    },
+    "badge": "\ud83c\udfa7 New Dropper"
+  }
+}
