@@ -1,0 +1,15 @@
+# State files managed by the bot via GitHub API
+# These are stored in GitHub for persistence but should NOT trigger Railway redeployments
+drop_cred_scores.json
+drop_cred_scanned.json
+playlist_state.json
+last_known_structure.json
+leaderboard_message_id.json
+weekly_posted.json
+
+# Local debug scripts
+debug_spotify.py
+audit_spotify_structure.py
+cleanup_ghost_threads.py
+real_titles.json
+map_discord_posts.py
