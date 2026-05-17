@@ -146,6 +146,10 @@ class DiscordClient:
             log.warning("Could not verify #playlist-updates message was posted.")
         return msg_id
 
+    def post_message(self, channel_id, message):
+        """Post a message to any channel by ID."""
+        return self._post_message(channel_id, message)
+
     def post_to_alerts(self, content):
         """Post a message to #bot-alerts (private, owner only)."""
         log.info(f"Posting to #bot-alerts: {content[:80]}...")
