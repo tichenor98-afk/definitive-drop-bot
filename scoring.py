@@ -218,12 +218,40 @@ class ScoreScanner:
             time.sleep(0.5)
         return all_messages
 
-    def get_reactions(self, channel_id, message_id):
-        """Get users who reacted with ❤️ to a message."""
-        # URL encode the emoji
-        url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/reactions/%E2%9D%A4%EF%B8%8F?limit=100"
-        data = self._get(url)
-        return [str(u["id"]) for u in (data or []) if not u.get("bot")]
+    def get_all_reactors(self, channel_id, message_id, message):
+        """
+        Get all users who reacted with ANY emoji to a message.
+        Returns a set of Discord user IDs.
+        Also returns the heart-only count for milestone tracking.
+        """
+        reactions = message.get("reactions", [])
+        all_reactors = set()
+        heart_count  = 0
+
+        for reaction in reactions:
+            emoji      = reaction.get("emoji", {})
+            emoji_name = emoji.get("name", "")
+            count      = reaction.get("count", 0)
+
+            # Track heart count separately for milestones
+            if emoji_name in ("❤️", "❤"):
+                heart_count = count
+
+            # Fetch who reacted with this emoji
+            emoji_str = emoji_name
+            if emoji.get("id"):
+                # Custom emoji
+                emoji_str = f"{emoji_name}:{emoji['id']}"
+            import urllib.parse
+            encoded = urllib.parse.quote(emoji_str)
+            url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/reactions/{encoded}?limit=100"
+            data = self._get(url)
+            if data:
+                for u in data:
+                    if not u.get("bot"):
+                        all_reactors.add(str(u["id"]))
+
+        return all_reactors, heart_count
 
     def get_forum_threads(self, channel_id):
         """Get all active threads in a forum channel."""
@@ -355,10 +383,9 @@ class ScoreScanner:
                     badge_events.append((display_name, nb))
             scanned["scored_messages"].append(msg_id)
 
-        # Score reactions on this message
+        # Score reactions on this message (any emoji)
         reaction_scorers = scanned["scored_reactions"].get(msg_id, [])
-        reactors = self.get_reactions(channel_id, msg_id)
-        heart_count = len(reactors)
+        reactors, heart_count = self.get_all_reactors(channel_id, msg_id, message)
 
         for reactor_id in reactors:
             if reactor_id in reaction_scorers:
