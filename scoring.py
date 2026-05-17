@@ -457,25 +457,34 @@ class ScoreScanner:
         channels = self.get_guild_channels(guild_id)
         log.info(f"Scanning {len(channels)} channels for activity...")
 
-        for ch in channels:
+        for ch_num, ch in enumerate(channels, 1):
             ch_id   = str(ch["id"])
             ch_name = ch.get("name", ch_id)
             ch_type = ch.get("type", 0)
 
+            log.info(f"Channel {ch_num}/{len(channels)}: #{ch_name} (type={ch_type})")
+
             # Type 15 = forum channel
             if ch_type == 15:
-                # Scan forum threads
+                log.info(f"  Fetching forum threads for #{ch_name}...")
                 threads = self.get_forum_threads(ch_id)
-                log.info(f"  #{ch_name}: {len(threads)} threads")
-                for thread in threads:
-                    thread_id = str(thread["id"])
-                    # Score the opening post (new_post)
+                log.info(f"  #{ch_name}: {len(threads)} threads to scan")
+
+                for t_num, thread in enumerate(threads, 1):
+                    thread_id   = str(thread["id"])
+                    thread_name = thread.get("name", thread_id)
+
+                    # Skip threads we have already fully scanned
+                    if thread_id in scanned.get("completed_threads", []):
+                        continue
+
+                    log.info(f"  Thread {t_num}/{len(threads)}: {thread_name}")
                     thread_msgs = self.get_all_messages(thread_id)
+                    log.info(f"    {len(thread_msgs)} messages in thread")
+
                     for i, msg in enumerate(thread_msgs):
                         if i == 0:
-                            # Opening post
                             if ch_id == str(forum_channel_id):
-                                # Score song added from bot post
                                 pe, be = self.score_song_post(scores, scanned, msg, ch_id)
                                 all_points.extend(pe)
                                 all_badges.extend(be)
@@ -485,25 +494,34 @@ class ScoreScanner:
                                 all_badges.extend(be)
                                 unknown_ids.update(unk)
                         else:
-                            # Reply/comment
                             pe, be, unk = self.score_message(scores, scanned, msg, thread_id, "forum_thread")
                             all_points.extend(pe)
                             all_badges.extend(be)
                             unknown_ids.update(unk)
                         time.sleep(0.1)
 
+                    # Mark thread as completed so we don't re-scan it
+                    if "completed_threads" not in scanned:
+                        scanned["completed_threads"] = []
+                    scanned["completed_threads"].append(thread_id)
+                    save_scanned(scanned)
+                    log.info(f"    Thread complete. Total points so far: {sum(s['total'] for s in scores.values())}")
+
+                log.info(f"  #{ch_name} forum scan complete.")
+
             # Type 0 = text channel
             elif ch_type == 0:
                 is_challenges = ch_id == str(challenges_channel_id)
                 messages = self.get_all_messages(ch_id)
                 log.info(f"  #{ch_name}: {len(messages)} messages")
-                for msg in messages:
+                for msg_num, msg in enumerate(messages, 1):
                     ch_type_label = "challenges" if is_challenges else "text"
                     pe, be, unk = self.score_message(scores, scanned, msg, ch_id, ch_type_label)
                     all_points.extend(pe)
                     all_badges.extend(be)
                     unknown_ids.update(unk)
                     time.sleep(0.1)
+                log.info(f"  #{ch_name} text scan complete.")
 
         # Remove known users from unknown set
         known_discord_ids = {
