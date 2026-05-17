@@ -22,6 +22,7 @@ from scoring      import (
     add_points, reset_weekly_scores, ScoreScanner, POINTS,
 )
 from leaderboard  import update_pinned_leaderboard, post_weekly_announcement
+from github_storage import setup_storage
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -58,6 +59,7 @@ EXCLUDED_CHANNEL_IDS  = {ALERTS_CHANNEL_ID}
 CHECK_INTERVAL        = int(os.environ.get("CHECK_INTERVAL", "600"))
 SCORE_SCAN_INTERVAL   = int(os.environ.get("SCORE_SCAN_INTERVAL", "1800"))  # 30 min
 SCAN_REQUEST_DELAY    = float(os.environ.get("SCAN_REQUEST_DELAY", "2.0"))  # seconds between Discord API calls during scan
+GITHUB_REPO           = os.environ.get("GITHUB_REPO", "tichenor98-afk/definitive-drop-bot")
 LEADERBOARD_INTERVAL  = int(os.environ.get("LEADERBOARD_INTERVAL", "86400"))  # 24 hours
 HEARTBEAT_INTERVAL    = 86400
 TOKEN_FILE            = "spotify_token.json"
@@ -243,6 +245,17 @@ def main():
         log.warning(f"State problem: {e} Trying backup...")
         state = load_backup_state()
 
+    # Set up GitHub persistence
+    gh = setup_storage()
+    if gh:
+        log.info("GitHub storage configured. Pulling latest state files...")
+        gh.pull_file("drop_cred_scores.json",  "drop_cred_scores.json")
+        gh.pull_file("drop_cred_scanned.json", "drop_cred_scanned.json")
+        gh.pull_file("playlist_state.json",    "playlist_state.json")
+        log.info("State files pulled from GitHub.")
+    else:
+        log.warning("GitHub storage not configured — state will not persist across redeployments.")
+
     scores  = load_scores()
     scanned = load_scanned()
 
@@ -305,6 +318,8 @@ def main():
 
                 save_state(state)
                 save_scores(scores)
+                if gh:
+                    gh.push_file("playlist_state.json", "playlist_state.json", "Playlist state update")
 
             last_success_time    = time.time()
             consecutive_failures = 0
@@ -344,6 +359,11 @@ def main():
                 )
                 save_scores(scores)
                 save_scanned(scanned)
+
+                # Push updated scores to GitHub for persistence
+                if gh:
+                    gh.push_file("drop_cred_scores.json",  "drop_cred_scores.json",  "Scoring scan complete")
+                    gh.push_file("drop_cred_scanned.json", "drop_cred_scanned.json", "Scoring scan complete")
 
                 # Post badge announcements
                 for display_name, new_badge in be:
