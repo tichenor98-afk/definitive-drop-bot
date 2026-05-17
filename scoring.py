@@ -153,10 +153,11 @@ def reset_weekly_scores(scores):
 # ── Discord scanning ──────────────────────────────────────────────────────────
 
 class ScoreScanner:
-    def __init__(self, bot_token, user_lookup, excluded_channel_ids=None):
+    def __init__(self, bot_token, user_lookup, excluded_channel_ids=None, request_delay=2.0):
         self.token             = bot_token
         self.users             = user_lookup
         self.excluded_channels = set(excluded_channel_ids or [])
+        self.request_delay     = request_delay  # seconds between API calls
         self.headers = {
             "Authorization": f"Bot {bot_token}",
             "Content-Type":  "application/json",
@@ -167,11 +168,12 @@ class ScoreScanner:
             try:
                 r = requests.get(url, headers=self.headers, timeout=15)
                 if r.status_code == 200:
+                    time.sleep(self.request_delay)  # throttle all requests
                     return r.json()
                 elif r.status_code == 429:
                     wait = float(r.json().get("retry_after", 5))
                     log.warning(f"Rate limited. Waiting {wait}s...")
-                    time.sleep(wait + 0.5)
+                    time.sleep(wait + 1.0)
                     continue
                 elif r.status_code == 403:
                     log.warning(f"No access to {url}")
