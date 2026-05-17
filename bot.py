@@ -1,7 +1,7 @@
 """
 bot.py
-Main bot loop. Coordinates Spotify, Discord, state, and user lookup.
-Checks the playlist every 10 minutes and posts changes to Discord.
+Main bot loop. Coordinates Spotify monitoring, Discord posting,
+activity scoring, and leaderboard management.
 """
 
 import logging
@@ -16,18 +16,23 @@ from state_manager  import (
     load_state, save_state, load_backup_state,
     initialize_state, validate_state, StateError,
 )
-from user_lookup import UserLookup
+from user_lookup  import UserLookup
+from scoring      import (
+    load_scores, save_scores, load_scanned, save_scanned,
+    add_points, reset_weekly_scores, ScoreScanner, POINTS,
+)
+from leaderboard  import update_pinned_leaderboard, post_weekly_announcement
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(name)-10s %(levelname)-8s %(message)s",
+    format="%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
     datefmt="%H:%M:%S",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 log = logging.getLogger("bot")
 
-# ── Config (all from Railway environment variables) ───────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────
 def require_env(key):
     val = os.environ.get(key)
     if not val:
@@ -43,22 +48,24 @@ FORUM_CHANNEL_ID      = require_env("FORUM_CHANNEL_ID")
 UPDATES_CHANNEL_ID    = require_env("UPDATES_CHANNEL_ID")
 ALERTS_CHANNEL_ID     = require_env("ALERTS_CHANNEL_ID")
 USERS_SHEET_CSV_URL   = require_env("USERS_SHEET_CSV_URL")
-INTRODUCE_CHANNEL_ID  = os.environ.get("INTRODUCE_CHANNEL_ID", "1505574947861303416")
+INTRODUCE_CHANNEL_ID  = os.environ.get("INTRODUCE_CHANNEL_ID",  "1505574947861303416")
+DROP_CRED_CHANNEL_ID  = os.environ.get("DROP_CRED_CHANNEL_ID",  "1505592556908449967")
+CHALLENGES_CHANNEL_ID = os.environ.get("CHALLENGES_CHANNEL_ID", "")
+GUILD_ID              = os.environ.get("GUILD_ID", "")
+
+EXCLUDED_CHANNEL_IDS  = {ALERTS_CHANNEL_ID}
 
 CHECK_INTERVAL        = int(os.environ.get("CHECK_INTERVAL", "600"))
-HEARTBEAT_INTERVAL    = 86400  # 24 hours
+SCORE_SCAN_INTERVAL   = int(os.environ.get("SCORE_SCAN_INTERVAL", "1800"))  # 30 min
+LEADERBOARD_INTERVAL  = int(os.environ.get("LEADERBOARD_INTERVAL", "86400"))  # 24 hours
+HEARTBEAT_INTERVAL    = 86400
 TOKEN_FILE            = "spotify_token.json"
 
-# Track IDs that existed before this bot was deployed.
-# These songs already have posts in Discord that we didn't create,
-# so we don't know their thread IDs. Bot knows about them but
-# cannot comment on their posts if removed.
 LEGACY_TRACK_IDS = set(["7lQy8vI73IL4Wft8I4eA5Z", "0lJK5ZmN9K4IaEi6QHj5W8", "2gG7E5OZi5D5QLRIctv63z", "6uWV09syluMJlYbAHgLRhn", "1nYg1Ac4xsGBkmTvhXDzG2", "5A9mGMMsmySIZmBH6icc4B", "01Oi7A4u4knAEPqylXM9s8", "6H3kDe7CGoWYBabAeVWGiD", "35q1B8x7zRsITx6SxcWK67", "5CIe9u7lex3fxPmwWqrjo3", "7rBMZvgeWnOTHWUh3Pvw51", "0wZurfElW3yOHscb38vBL8", "0m1DJ5Jkv3kdnGrcZsJFmC", "5pK4elvBpzeAk8amFG3NVN", "0whFZ2qMsiUMkQOxsfRy5p", "78sUOio7Q63zyraK2auLla", "0BqQWfhMrkpRAUCbdfdHUC", "4dT3qLUU6fFUmomLzk2cUA", "5ynO8cYFjDwELIZfFHHeYe", "2fUesvrGtDQ37bUz30nMak", "1rmtygBvOF8Wb1OwVMAyaE", "0P2vAvvWni2tNXOdbH3JFk", "0xeBC6N81ZBYDtxuBFGSuO", "750wm5pwuAQfnSLX8mxa5f", "6QewNVIDKdSl8Y3ycuHIei", "3aKhLm5mONfAtS1NZXG8f4", "2lp0PO2D90zcFWy8toVqgn", "0hSUqAj87s0gHUS8U4TRIF", "1dfHpGeaXunLRNvzSZOZtc", "4E5xVW505akJX0wcKj8Mpd", "60QLLec3yKDwloXCyummPy", "4EchqUKQ3qAQuRNKmeIpnf", "43G3McVkRa8V7oGQzfQuRr", "3lSrLqwpS23lMqhtDierCq", "1h2xVEoJORqrg71HocgqXd", "2SIVPuWP84mPNhF0Ns9nWC", "6zsk6uF3MxfIeHPlubKBvR", "31er9IGsfFbwqy1pH4aiTP", "2NVpYQqdraEcQwqT7GhUkh", "0bJKesHl9raebAYBpQp3wv", "0L7zm6afBEtrNKo6C6Gj08", "6QyBIZEvs11K9lKjyLYtv6", "5CeL9C3bsoe4yzYS1Qz8cw", "07p7PALHp6ZcD5tmlbO94N", "41eFwwTvEhuBgE4SAXxRGd", "69MwNXryg6NT1lV7buN7U7", "0wZYfxL16dtfTvxFpWTB7L", "2IKd8ozOHYuVqrYJ0tqghP", "50fGkq9l9Zsn1x7C8GKIYr", "0uppYCG86ajpV2hSR3dJJ0", "6dmiV9JGjv4vGgLwEZTaOI", "4v2rkl1mC3zVAz0nXMx9r4", "2TVutF2Xy9R6PLVQ5jEEUs", "4KxhIoBjdvaIGA5U6a1c3o", "0LtsuNRz3IMRrHCYO9fKRk", "4jQDaI7FRGaDB0llURpnNf", "0z8oPUM05RZBJ1A1dXPsSs", "3CIOopLwvyMvXk97ZEksKO", "4xVXe1VS5zlQyECVk6GRrL", "54bm2e3tk8cliUz3VSdCPZ", "154gL4Xb5AsreMkcDlVFYS", "1672RT45nXNUb28fzzPxn8", "1a19jsjG2DvbN1fVJonKUU", "3fkPMWQ6cBNBLuFcPyMS8s", "4E0P1xs3JNmsNr5c5nFTZJ", "6CxQsBfTmhx0RsoJoV8hH7", "3agtg0x11wPvLIWkYR39nZ", "5UWwZ5lm5PKu6eKsHAGxOk", "6J5kc12BW5HuP3d7C3vvx8", "27BgDmciSjoxTG0almHTpZ", "0N3W5peJUQtI4eyR6GJT5O", "4fjWStUaP7aXdT0d3YxvPo", "2gdtLnVGGg80Kj9GiqP0vH", "06h9kk12VjJ2bqcBc6IScR", "5sFDReWLrZHLFZFjHsjUTS", "5fKZJHzJ9d3MADArbm9muW", "0bt3YJTupDqdTKpnFFgs7f", "6cr6UDpkjEaMQ80OjWqEBQ", "7k0UY4Kabh7SUHXowyfKj7", "2amzrvbxYiq8AxGntIiw5V", "20KSB3DRekMDCb31rY0ATd", "3gjHnylel3PTRpjS44ocqr", "7DD7eSuYSC5xk2ArU62esN", "5b1jZ9geGD4boxz24XgGPp", "033N3Mf87ODmORg6YO61cm", "7fcfNW0XxTWlwVlftzfDOR", "2id8E4WvczfKHB4LHI7Np3", "7qj6lBOB1QTgBmKedXuIbs", "2PpNgmrS9mAyrkRAwn6YPq", "1CM1wOqD2AIjt2MWd31LV2", "2V4Bc2I962j7acQj1N0PiQ", "2QSUyofqpGDCo026OPiTBQ", "53DfWyh0C0rJUGpsmtdRc1", "3YuaBvuZqcwN3CEAyyoaei", "5EicljVZKVOo2LZHREtWmQ", "0xaNdYwK8ZF3cHSjraQGC0", "3QZ7uX97s82HFYSmQUAN1D", "4pzcMiIkEv8cOe5vD7xfGq", "2VGf3YQ6Zfzb6YyDatYAcY", "10V8XpuyMoEcSMfM79WDET", "0hDQV9X1Da5JrwhK8gu86p", "2854fjg3reX87rDKe6Bk73", "4C7Ss9bTPOWJMh3rarF1mN", "0ObrXLrfrqJUNc8RfmIBHP", "0Dw9z44gXhplDh5HCWZIxP", "2Bux4j9el8GFOrvAE8dMA3", "4VwPsMcRt1HPVKIdcwY9Uj", "2AdRSHeYmDGMrgIfiS2w7K", "5Cr3dgYZKJrUTJjy2bEaYa", "006yvCdaWUS79qp2Ip3Hdl", "26Kw6zBo3Uy98q5LTlFfVJ", "1H4idkmruFoJBg1DvUv2tY", "54bO2CHOgGN44oWmAqib0I"])
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def fmt_date(iso):
-    """Format ISO date string to readable date."""
     try:
         dt = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         return dt.strftime("%B %d, %Y")
@@ -71,10 +78,9 @@ def now_str():
 def now_date():
     return datetime.now(timezone.utc).strftime("%B %d, %Y")
 
-# ── Main logic ────────────────────────────────────────────────────────────────
+# ── Song handlers ─────────────────────────────────────────────────────────────
 
-def handle_added_song(track_id, track, discord, users, state):
-    """Handle a newly added song: create Discord post and log it."""
+def handle_added_song(track_id, track, discord, users, state, scores, scanned):
     name      = track["name"]
     artist    = track["artist"]
     url       = track["url"]
@@ -83,9 +89,9 @@ def handle_added_song(track_id, track, discord, users, state):
 
     log.info(f"New song: {name} -- {artist} (added by {added_by})")
 
-    # Alert if this is an unknown user
+    # Alert and introduce unknown Spotify user
     if track.get("added_by") and users.is_unknown(track.get("added_by", "")):
-        spotify_id = track['added_by']
+        spotify_id = track["added_by"]
         discord.post_to_alerts(
             f"⚠️ Unknown Spotify user `{spotify_id}` added a song.\n"
             f"Song: {name} by {artist}\n"
@@ -94,11 +100,11 @@ def handle_added_song(track_id, track, discord, users, state):
         discord.post_message(
             INTRODUCE_CHANNEL_ID,
             f"🎵 **{name}** by **{artist}** just landed on the playlist — nice pick!\n"
-            f"But who ARE you?! Spotify says `{spotify_id}` but that's not a name 😄\n"
+            f"But who ARE you?! Spotify says `{spotify_id}` but that\'s not a name 😄\n"
             f"Drop your name below so we can make it official!"
         )
 
-    # 1. Create forum post in #the-playlist
+    # Create forum post in #the-playlist
     post_content = (
         f"🎵 **{name}**\n"
         f"Artist: {artist}\n"
@@ -119,7 +125,7 @@ def handle_added_song(track_id, track, discord, users, state):
 
     time.sleep(1)
 
-    # 2. Log in #playlist-updates
+    # Log in #playlist-updates
     try:
         discord.post_to_updates(
             f"✅ **Song Added**\n"
@@ -129,10 +135,14 @@ def handle_added_song(track_id, track, discord, users, state):
             f"Added: {added_at}"
         )
     except DiscordError as e:
-        log.error(f"Failed to post to #playlist-updates for {name}: {e}")
-        discord.post_to_alerts(f"⚠️ Failed to post addition of {name} to #playlist-updates. Error: {e}")
+        log.error(f"Failed to post to #playlist-updates: {e}")
 
-    # Update state
+    # Award points
+    if added_by and added_by != track.get("added_by", ""):
+        total, badge_changed, new_badge = add_points(scores, added_by, "song_added")
+        if badge_changed:
+            announce_badge(discord, added_by, new_badge)
+
     state[track_id] = {
         "thread_id": thread_id,
         "name":      name,
@@ -142,30 +152,24 @@ def handle_added_song(track_id, track, discord, users, state):
 
 
 def handle_removed_song(track_id, song_state, discord):
-    """Handle a removed song: comment on its post and log it."""
     name      = song_state.get("name", track_id)
     artist    = song_state.get("artist", "")
     thread_id = song_state.get("thread_id")
-    removed   = now_str()
-    removed_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    removed_date = now_date()
 
     log.info(f"Removed: {name} -- {artist}")
 
-    # 1. Comment on the song's post in #the-playlist (if we have the thread ID)
     if thread_id:
         commented = discord.comment_on_post(thread_id, f"Removed {removed_date}")
         if not commented:
             discord.post_to_alerts(
-                f"⚠️ Could not comment on Discord post for removed song: {name} by {artist}\n"
-                f"Thread ID: {thread_id}"
+                f"⚠️ Could not comment on Discord post for removed song: {name} by {artist}"
             )
     else:
-        # This is a legacy song — we don't have its thread ID
-        log.info(f"No thread ID for {name} — this is a legacy song. Skipping comment.")
+        log.info(f"No thread ID for {name} — legacy song, skipping comment.")
 
     time.sleep(1)
 
-    # 2. Log in #playlist-updates
     try:
         discord.post_to_updates(
             f"❌ **Song Removed**\n"
@@ -174,58 +178,20 @@ def handle_removed_song(track_id, song_state, discord):
             f"Removed: {removed_date}"
         )
     except DiscordError as e:
-        log.error(f"Failed to post removal of {name} to #playlist-updates: {e}")
-        discord.post_to_alerts(f"⚠️ Failed to post removal of {name} to #playlist-updates. Error: {e}")
+        log.error(f"Failed to post removal to #playlist-updates: {e}")
 
     time.sleep(1)
 
 
-def check_for_changes(spotify, discord, users, state):
-    """
-    Core logic: compare current Spotify playlist to known state.
-    Returns updated state.
-    """
-    previous_count = len(state) if state else None
-
+def announce_badge(discord, display_name, new_badge):
+    """Post a badge achievement announcement."""
     try:
-        tracks = spotify.get_playlist_tracks(previous_count=previous_count)
-    except SpotifyError as e:
-        raise  # let the caller handle this
-
-    # Validate before acting
-    is_valid, reason = validate_state(state or {}, len(tracks))
-    if state and not is_valid:
-        raise StateError(f"State validation failed: {reason}")
-
-    current_ids = set(tracks.keys())
-    known_ids   = set(state.keys()) if state else set()
-
-    added   = current_ids - known_ids
-    removed = known_ids   - current_ids
-
-    # Safety check: never remove more than 10 songs at once
-    if len(removed) > 10:
-        raise StateError(
-            f"Bot would remove {len(removed)} songs at once. "
-            f"This is suspicious. Skipping to prevent false removals."
+        discord.post_message(
+            DROP_CRED_CHANNEL_ID,
+            f"🎉 **{display_name}** just leveled up to **{new_badge}** status! Keep it up! 🎵"
         )
-
-    if not added and not removed:
-        log.info("No changes detected.")
-        return state
-
-    log.info(f"Changes detected: {len(added)} added, {len(removed)} removed.")
-
-    # Handle additions
-    for track_id in added:
-        handle_added_song(track_id, tracks[track_id], discord, users, state)
-
-    # Handle removals
-    for track_id in removed:
-        handle_removed_song(track_id, state[track_id], discord)
-        del state[track_id]
-
-    return state
+    except Exception as e:
+        log.warning(f"Could not post badge announcement: {e}")
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
@@ -235,7 +201,6 @@ def main():
     log.info("Definitive Drop Playlist Bot starting...")
     log.info("=" * 60)
 
-    # Initialize clients
     spotify = SpotifyClient(
         client_id     = SPOTIFY_CLIENT_ID,
         client_secret = SPOTIFY_CLIENT_SECRET,
@@ -248,81 +213,82 @@ def main():
         updates_channel_id = UPDATES_CHANNEL_ID,
         alerts_channel_id  = ALERTS_CHANNEL_ID,
     )
-    users = UserLookup(USERS_SHEET_CSV_URL)
+    users   = UserLookup(None)
+    scanner = ScoreScanner(
+        bot_token            = DISCORD_BOT_TOKEN,
+        user_lookup          = users,
+        excluded_channel_ids = EXCLUDED_CHANNEL_IDS,
+    )
 
-    # Test Discord connection on startup
+    # Startup checks
     try:
         discord.test_connection()
     except DiscordError as e:
-        log.error(f"Discord connection failed on startup: {e}")
-        # Can't post alert since Discord is down, just exit and let Railway restart
+        log.error(f"Discord connection failed: {e}")
         sys.exit(1)
 
-    # Refresh Spotify token on startup
     try:
         spotify.refresh_access_token()
     except SpotifyError as e:
-        log.error(f"Spotify token refresh failed on startup: {e}")
-        discord.post_to_alerts(
-            f"⚠️ Bot failed to start: Spotify token error.\n"
-            f"Error: {e}\n"
-            f"Run get_spotify_token.py to generate a new token."
-        )
+        log.error(f"Spotify token refresh failed: {e}")
+        discord.post_to_alerts(f"⚠️ Bot failed to start: {e}")
         sys.exit(1)
 
-    # Load state
+    # Load state and scores
     try:
         state = load_state()
     except StateError as e:
-        log.warning(f"State file problem: {e} Trying backup...")
-        discord.post_to_alerts(f"⚠️ State file problem: {e} Attempting to load backup.")
+        log.warning(f"State problem: {e} Trying backup...")
         state = load_backup_state()
-        if state is None:
-            log.info("No valid state or backup. Will initialize on first check.")
 
-    # Announce startup
+    scores  = load_scores()
+    scanned = load_scanned()
+
     discord.post_to_alerts(
-        f"✅ Bot started successfully at {now_str()}\n"
-        f"Checking playlist every {CHECK_INTERVAL // 60} minutes."
+        f"✅ Bot started at {now_str()}\n"
+        f"Checking playlist every {CHECK_INTERVAL // 60} min. "
+        f"Scanning activity every {SCORE_SCAN_INTERVAL // 60} min."
     )
 
-    last_heartbeat    = time.time()
-    last_success_time = time.time()
+    last_heartbeat      = time.time()
+    last_success_time   = time.time()
+    last_score_scan     = 0  # force immediate scan on startup
+    last_leaderboard    = 0  # force immediate leaderboard on startup
     consecutive_failures = 0
 
     while True:
+        # ── Spotify playlist check ────────────────────────────────────────────
         try:
             log.info("-" * 40)
             log.info(f"Checking playlist at {now_str()}...")
 
-            # Fetch tracks
             previous_count = len(state) if state else None
             tracks = spotify.get_playlist_tracks(previous_count=previous_count)
 
-            # First run: initialize state
+            for warning in getattr(spotify, "_last_warnings", []):
+                discord.post_to_alerts(f"⚠️ Spotify parser warning: {warning}")
+            if getattr(spotify, "_last_structure_changed", False):
+                discord.post_to_alerts(
+                    "⚠️ Spotify API structure changed — parser adapted automatically."
+                )
+
             if state is None:
                 log.info(f"First run: {len(tracks)} songs on Spotify.")
                 state = initialize_state(LEGACY_TRACK_IDS, tracks)
                 save_state(state)
                 discord.post_to_alerts(
                     f"✅ Bot initialized at {now_str()}\n"
-                    f"{len(state)} songs loaded. Bot is now monitoring for changes."
+                    f"{len(state)} songs loaded."
                 )
-                last_success_time    = time.time()
-                consecutive_failures = 0
-
             else:
-                # Check for changes
                 current_ids = set(tracks.keys())
                 known_ids   = set(state.keys())
                 added       = current_ids - known_ids
                 removed     = known_ids   - current_ids
 
-                # Safety: never remove more than 10 at once
                 if len(removed) > 10:
                     raise StateError(
-                        f"Would remove {len(removed)} songs at once — suspiciously high. "
-                        f"Skipping this check."
+                        f"Would remove {len(removed)} songs at once — suspicious. Skipping."
                     )
 
                 if not added and not removed:
@@ -330,61 +296,88 @@ def main():
                 else:
                     log.info(f"{len(added)} added, {len(removed)} removed.")
                     for track_id in added:
-                        handle_added_song(track_id, tracks[track_id], discord, users, state)
+                        handle_added_song(track_id, tracks[track_id], discord, users, state, scores, scanned)
                     for track_id in list(removed):
                         handle_removed_song(track_id, state[track_id], discord)
                         del state[track_id]
 
                 save_state(state)
-                last_success_time    = time.time()
-                consecutive_failures = 0
+                save_scores(scores)
 
-            # Daily heartbeat
-            if time.time() - last_heartbeat > HEARTBEAT_INTERVAL:
-                discord.post_to_alerts(
-                    f"💓 Bot heartbeat — {now_str()}\n"
-                    f"Playlist has {len(state)} songs. Bot is running normally."
-                )
-                last_heartbeat = time.time()
+            last_success_time    = time.time()
+            consecutive_failures = 0
 
         except SpotifyError as e:
             consecutive_failures += 1
             log.error(f"Spotify error: {e}")
-            discord.post_to_alerts(
-                f"⚠️ Spotify error (failure #{consecutive_failures}): {e}\n"
-                f"Will retry in {CHECK_INTERVAL // 60} minutes."
-            )
-
+            discord.post_to_alerts(f"⚠️ Spotify error #{consecutive_failures}: {e}")
         except StateError as e:
             consecutive_failures += 1
             log.error(f"State error: {e}")
-            discord.post_to_alerts(
-                f"⚠️ State error (failure #{consecutive_failures}): {e}\n"
-                f"No changes were posted. Will retry in {CHECK_INTERVAL // 60} minutes."
-            )
-
+            discord.post_to_alerts(f"⚠️ State error #{consecutive_failures}: {e}")
         except DiscordError as e:
             consecutive_failures += 1
             log.error(f"Discord error: {e}")
-            # Can't post alert if Discord is down
-            if "401" in str(e) or "token" in str(e).lower():
-                log.error("Discord token may be invalid. Bot cannot recover automatically.")
-
         except Exception as e:
             consecutive_failures += 1
             log.error(f"Unexpected error: {e}", exc_info=True)
-            discord.post_to_alerts(
-                f"⚠️ Unexpected error (failure #{consecutive_failures}): {e}\n"
-                f"Will retry in {CHECK_INTERVAL // 60} minutes."
-            )
+            discord.post_to_alerts(f"⚠️ Unexpected error #{consecutive_failures}: {e}")
 
-        # Alert if no successful check in 30 minutes
         if time.time() - last_success_time > 1800:
             discord.post_to_alerts(
-                f"🚨 Bot alert: No successful playlist check in 30+ minutes.\n"
-                f"Last success: {datetime.fromtimestamp(last_success_time, tz=timezone.utc).strftime('%H:%M UTC')}\n"
-                f"Consecutive failures: {consecutive_failures}"
+                f"🚨 No successful check in 30+ minutes. Failures: {consecutive_failures}"
             )
+
+        # ── Activity scoring scan ─────────────────────────────────────────────
+        if GUILD_ID and time.time() - last_score_scan > SCORE_SCAN_INTERVAL:
+            try:
+                log.info("Scanning Discord activity for scoring...")
+                pe, be, unknown_ids = scanner.scan_all(
+                    guild_id             = GUILD_ID,
+                    forum_channel_id     = FORUM_CHANNEL_ID,
+                    challenges_channel_id = CHALLENGES_CHANNEL_ID,
+                    scores               = scores,
+                    scanned              = scanned,
+                )
+                save_scores(scores)
+                save_scanned(scanned)
+
+                # Post badge announcements
+                for display_name, new_badge in be:
+                    announce_badge(discord, display_name, new_badge)
+                    time.sleep(1)
+
+                # Alert about unknown Discord users
+                for discord_id in unknown_ids:
+                    discord.post_to_alerts(
+                        f"⚠️ Unknown Discord user ID `{discord_id}` is active in the server.\n"
+                        f"Add them to user_lookup.py so their activity can be scored."
+                    )
+
+                last_score_scan = time.time()
+                log.info(f"Scoring scan complete. {len(pe)} point events.")
+            except Exception as e:
+                log.error(f"Scoring scan error: {e}", exc_info=True)
+                discord.post_to_alerts(f"⚠️ Scoring scan error: {e}")
+
+        # ── Leaderboard update ────────────────────────────────────────────────
+        if time.time() - last_leaderboard > LEADERBOARD_INTERVAL:
+            try:
+                update_pinned_leaderboard(DISCORD_BOT_TOKEN, scores)
+                post_weekly_announcement(DISCORD_BOT_TOKEN, scores)
+                last_leaderboard = time.time()
+            except Exception as e:
+                log.error(f"Leaderboard error: {e}")
+                discord.post_to_alerts(f"⚠️ Leaderboard update error: {e}")
+
+        # ── Daily heartbeat ───────────────────────────────────────────────────
+        if time.time() - last_heartbeat > HEARTBEAT_INTERVAL:
+            discord.post_to_alerts(
+                f"💓 Bot heartbeat — {now_str()}\n"
+                f"Playlist: {len(state) if state else 0} songs. "
+                f"Scores tracked for {len(scores)} users."
+            )
+            last_heartbeat = time.time()
 
         time.sleep(CHECK_INTERVAL)
 
