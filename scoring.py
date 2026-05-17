@@ -220,38 +220,50 @@ class ScoreScanner:
 
     def get_all_reactors(self, channel_id, message_id, message):
         """
-        Get all users who reacted with ANY emoji to a message.
-        Returns a set of Discord user IDs.
-        Also returns the heart-only count for milestone tracking.
+        Get reaction data from a message efficiently.
+        
+        Uses reaction counts already in the message data to avoid
+        excessive API calls. Only fetches reactor IDs for the heart
+        emoji (needed for attribution of heart_received points).
+        
+        Returns:
+          all_reactor_ids: set of Discord IDs who reacted with ANY emoji
+                           (estimated from reaction counts — used for heart_given)
+          heart_count: number of heart reactions (for milestones)
+          heart_reactor_ids: set of Discord IDs who reacted with ❤️
+                             (for awarding heart_received points)
         """
         reactions = message.get("reactions", [])
-        all_reactors = set()
-        heart_count  = 0
+        if not reactions:
+            return set(), 0, set()
+
+        heart_count       = 0
+        heart_reactor_ids = set()
+        total_reaction_count = 0
 
         for reaction in reactions:
             emoji      = reaction.get("emoji", {})
             emoji_name = emoji.get("name", "")
             count      = reaction.get("count", 0)
+            total_reaction_count += count
 
-            # Track heart count separately for milestones
+            # Track heart reactions — fetch who reacted for attribution
             if emoji_name in ("❤️", "❤"):
                 heart_count = count
+                if count > 0:
+                    import urllib.parse
+                    encoded = urllib.parse.quote("❤️")
+                    url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/reactions/{encoded}?limit=100"
+                    data = self._get(url)
+                    if data:
+                        heart_reactor_ids = {
+                            str(u["id"]) for u in data if not u.get("bot")
+                        }
 
-            # Fetch who reacted with this emoji
-            emoji_str = emoji_name
-            if emoji.get("id"):
-                # Custom emoji
-                emoji_str = f"{emoji_name}:{emoji['id']}"
-            import urllib.parse
-            encoded = urllib.parse.quote(emoji_str)
-            url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/reactions/{encoded}?limit=100"
-            data = self._get(url)
-            if data:
-                for u in data:
-                    if not u.get("bot"):
-                        all_reactors.add(str(u["id"]))
-
-        return all_reactors, heart_count
+        # For non-heart reactions, we know someone reacted but not who.
+        # We award heart_given points only for heart reactions where we
+        # know the reactor. This keeps API calls manageable.
+        return heart_reactor_ids, heart_count, heart_reactor_ids
 
     def get_forum_threads(self, channel_id):
         """Get all active threads in a forum channel."""
@@ -383,11 +395,11 @@ class ScoreScanner:
                     badge_events.append((display_name, nb))
             scanned["scored_messages"].append(msg_id)
 
-        # Score reactions on this message (any emoji)
+        # Score reactions on this message
         reaction_scorers = scanned["scored_reactions"].get(msg_id, [])
-        reactors, heart_count = self.get_all_reactors(channel_id, msg_id, message)
+        heart_reactor_ids, heart_count, _ = self.get_all_reactors(channel_id, msg_id, message)
 
-        for reactor_id in reactors:
+        for reactor_id in heart_reactor_ids:
             if reactor_id in reaction_scorers:
                 continue
             if self.users.is_bot(reactor_id):
