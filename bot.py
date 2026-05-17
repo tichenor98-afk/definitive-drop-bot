@@ -57,6 +57,7 @@ EXCLUDED_CHANNEL_IDS  = {ALERTS_CHANNEL_ID}
 
 CHECK_INTERVAL        = int(os.environ.get("CHECK_INTERVAL", "600"))
 SCORE_SCAN_INTERVAL   = int(os.environ.get("SCORE_SCAN_INTERVAL", "1800"))  # 30 min
+SCAN_REQUEST_DELAY    = float(os.environ.get("SCAN_REQUEST_DELAY", "2.0"))  # seconds between Discord API calls during scan
 LEADERBOARD_INTERVAL  = int(os.environ.get("LEADERBOARD_INTERVAL", "86400"))  # 24 hours
 HEARTBEAT_INTERVAL    = 86400
 TOKEN_FILE            = "spotify_token.json"
@@ -218,6 +219,7 @@ def main():
         bot_token            = DISCORD_BOT_TOKEN,
         user_lookup          = users,
         excluded_channel_ids = EXCLUDED_CHANNEL_IDS,
+        request_delay        = SCAN_REQUEST_DELAY,
     )
 
     # Startup checks
