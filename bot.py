@@ -43,6 +43,7 @@ FORUM_CHANNEL_ID      = require_env("FORUM_CHANNEL_ID")
 UPDATES_CHANNEL_ID    = require_env("UPDATES_CHANNEL_ID")
 ALERTS_CHANNEL_ID     = require_env("ALERTS_CHANNEL_ID")
 USERS_SHEET_CSV_URL   = require_env("USERS_SHEET_CSV_URL")
+INTRODUCE_CHANNEL_ID  = os.environ.get("INTRODUCE_CHANNEL_ID", "1505574947861303416")
 
 CHECK_INTERVAL        = int(os.environ.get("CHECK_INTERVAL", "600"))
 HEARTBEAT_INTERVAL    = 86400  # 24 hours
@@ -84,10 +85,17 @@ def handle_added_song(track_id, track, discord, users, state):
 
     # Alert if this is an unknown user
     if track.get("added_by") and users.is_unknown(track.get("added_by", "")):
+        spotify_id = track['added_by']
         discord.post_to_alerts(
-            f"⚠️ Unknown Spotify user `{track['added_by']}` added a song.\n"
+            f"⚠️ Unknown Spotify user `{spotify_id}` added a song.\n"
             f"Song: {name} by {artist}\n"
-            f"Add them to the name lookup sheet so their name shows correctly."
+            f"Add them to user_lookup.py so their name shows correctly."
+        )
+        discord.post_message(
+            INTRODUCE_CHANNEL_ID,
+            f"🎵 **{name}** by **{artist}** just landed on the playlist — nice pick!\n"
+            f"But who ARE you?! Spotify says `{spotify_id}` but that's not a name 😄\n"
+            f"Drop your name below so we can make it official!"
         )
 
     # 1. Create forum post in #the-playlist
