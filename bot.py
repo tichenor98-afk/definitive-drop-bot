@@ -318,8 +318,6 @@ def main():
 
                 save_state(state)
                 save_scores(scores)
-                if gh:
-                    gh.push_file("playlist_state.json", "playlist_state.json", "Playlist state update")
 
             last_success_time    = time.time()
             consecutive_failures = 0
