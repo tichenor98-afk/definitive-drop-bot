@@ -72,6 +72,12 @@ USER_REGISTRY = [
         "discord_id":      None,   # not in Discord yet
         "discord_handle":  None,
     },
+      {
+        "display_name":    "Jeremy Jones",
+        "spotify_id":      "1264142689",
+        "discord_id":      None,   # not in Discord yet
+        "discord_handle":  None,
+        },
     {
         "display_name":    "Angelina McNulty",
         "spotify_id":      "angelinamc99",
