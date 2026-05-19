@@ -148,7 +148,12 @@ class DiscordClient:
 
     def post_message(self, channel_id, message):
         """Post a message to any channel by ID."""
-        return self._post_message(channel_id, message)
+        log.info(f"Posting to channel {channel_id}: {message[:80]}...")
+        result = self._post(
+            f"{DISCORD_API}/channels/{channel_id}/messages",
+            {"content": message},
+        )
+        return result.get("id") if result else None
 
     def post_to_alerts(self, content):
         """Post a message to #bot-alerts (private, owner only)."""
