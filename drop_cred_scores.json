@@ -116,5 +116,14 @@
       "song_added": 24
     },
     "badge": "\ud83c\udfa7 New Dropper"
+  },
+  "Jeremy Jones": {
+    "total": 128,
+    "weekly": 128,
+    "week_start": "2026-05-19T00:00:00+00:00",
+    "breakdown": {
+      "song_added": 128
+    },
+    "badge": "\ud83d\udcc0 Crate Digger"
   }
 }
