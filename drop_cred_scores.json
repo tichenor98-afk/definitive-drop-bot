@@ -9,13 +9,13 @@
     "badge": "\ud83c\udfa7 New Dropper"
   },
   "MHT": {
-    "total": 303,
-    "weekly": 303,
+    "total": 305,
+    "weekly": 305,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 136,
       "heart_given": 6,
-      "comment": 104,
+      "comment": 106,
       "heart_received": 9,
       "song_added": 48
     },
