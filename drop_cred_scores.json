@@ -9,12 +9,12 @@
     "badge": "\ud83c\udfa7 New Dropper"
   },
   "MHT": {
-    "total": 337,
-    "weekly": 337,
+    "total": 338,
+    "weekly": 338,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 152,
-      "heart_given": 6,
+      "heart_given": 7,
       "comment": 106,
       "heart_received": 9,
       "song_added": 64
@@ -22,13 +22,14 @@
     "badge": "\ud83d\udd25 Drop Dealer"
   },
   "Christopher Tichenor": {
-    "total": 148,
-    "weekly": 148,
+    "total": 169,
+    "weekly": 169,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 48,
-      "comment": 12,
-      "song_added": 88
+      "comment": 14,
+      "song_added": 104,
+      "heart_received": 3
     },
     "badge": "\ud83d\udcc0 Crate Digger"
   },
