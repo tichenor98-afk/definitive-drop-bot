@@ -9,29 +9,29 @@
     "badge": "\ud83c\udfa7 New Dropper"
   },
   "MHT": {
-    "total": 394,
-    "weekly": 394,
+    "total": 450,
+    "weekly": 450,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 168,
       "heart_given": 7,
       "comment": 106,
       "heart_received": 9,
-      "song_added": 104
+      "song_added": 160
     },
-    "badge": "\ud83d\udd25 Drop Dealer"
+    "badge": "\ud83d\udc51 Canon Builder"
   },
   "Christopher Tichenor": {
-    "total": 193,
-    "weekly": 193,
+    "total": 233,
+    "weekly": 233,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 64,
       "comment": 14,
-      "song_added": 112,
+      "song_added": 152,
       "heart_received": 3
     },
-    "badge": "\ud83d\udcc0 Crate Digger"
+    "badge": "\ud83d\udd25 Drop Dealer"
   },
   "Dennis McNulty": {
     "total": 257,
