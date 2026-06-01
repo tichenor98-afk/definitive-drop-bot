@@ -9,13 +9,13 @@
     "badge": "\ud83c\udfa7 New Dropper"
   },
   "MHT": {
-    "total": 460,
-    "weekly": 460,
+    "total": 463,
+    "weekly": 463,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 176,
-      "heart_given": 7,
-      "comment": 108,
+      "heart_given": 8,
+      "comment": 110,
       "heart_received": 9,
       "song_added": 160
     },
@@ -34,13 +34,13 @@
     "badge": "\ud83d\udd25 Drop Dealer"
   },
   "Dennis McNulty": {
-    "total": 257,
-    "weekly": 257,
+    "total": 264,
+    "weekly": 264,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 104,
-      "heart_received": 3,
-      "comment": 76,
+      "heart_received": 6,
+      "comment": 80,
       "heart_given": 2,
       "song_added": 72
     },
