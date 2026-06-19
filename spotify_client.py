@@ -3,6 +3,10 @@ spotify_client.py
 Handles all Spotify API interaction: authentication, token refresh,
 retry logic, and rate limit handling.
 Delegates all response parsing to spotify_parser.py.
+
+Updated June 2026: handles Spotify's new 6-month refresh token expiry policy.
+When a refresh token expires (invalid_grant), the bot alerts #bot-alerts
+and shuts down gracefully rather than retrying with a dead token.
 """
 
 import json
@@ -20,6 +24,15 @@ MIN_TRACK_FRACTION = 0.80
 
 
 class SpotifyError(Exception):
+    pass
+
+
+class SpotifyTokenExpiredError(SpotifyError):
+    """
+    Raised when the refresh token has expired (Spotify invalid_grant).
+    This requires human intervention — the bot cannot recover automatically.
+    The owner must run get_spotify_token.py to generate a new token.
+    """
     pass
 
 
@@ -63,7 +76,13 @@ class SpotifyClient:
             log.warning(f"Could not save updated refresh token: {e}")
 
     def refresh_access_token(self):
-        """Get a fresh access token using the stored refresh token."""
+        """
+        Get a fresh access token using the stored refresh token.
+
+        Raises SpotifyTokenExpiredError if Spotify returns invalid_grant,
+        which means the refresh token has expired (Spotify's 6-month policy).
+        The owner must run get_spotify_token.py to fix this.
+        """
         refresh_token = self._load_refresh_token()
         for attempt in range(3):
             try:
@@ -83,12 +102,33 @@ class SpotifyClient:
                         self._save_refresh_token(data["refresh_token"])
                     log.info("Spotify access token refreshed.")
                     return
+
                 elif r.status_code == 400:
-                    raise SpotifyError(
-                        "Spotify token refresh failed (400 Bad Request). "
-                        "The refresh token may have expired. "
-                        "Run get_spotify_token.py to generate a new token."
-                    )
+                    error_data  = r.json()
+                    error_code  = error_data.get("error", "")
+                    error_desc  = error_data.get("error_description", "")
+
+                    if error_code == "invalid_grant":
+                        # ── Spotify 6-month token expiry ──────────────────
+                        # Per Spotify's June 2026 policy, refresh tokens
+                        # expire after 6 months. Do NOT retry — discard
+                        # the token and require the owner to reauthorize.
+                        log.error(
+                            "Spotify refresh token has expired (invalid_grant). "
+                            "Owner must run get_spotify_token.py to reauthorize."
+                        )
+                        raise SpotifyTokenExpiredError(
+                            "Spotify refresh token expired (invalid_grant).\n"
+                            "Action required: run get_spotify_token.py on your computer, "
+                            "then upload the new spotify_token.json to GitHub.\n"
+                            f"Spotify error: {error_desc}"
+                        )
+                    else:
+                        raise SpotifyError(
+                            f"Spotify token refresh failed (400): {error_code} — {error_desc}. "
+                            "Run get_spotify_token.py to generate a new token."
+                        )
+
                 elif r.status_code == 401:
                     raise SpotifyError(
                         "Spotify token refresh failed (401 Unauthorized). "
@@ -169,14 +209,6 @@ class SpotifyClient:
         """
         Fetch all tracks from the playlist.
         Returns a dict of track_id -> track info.
-
-        Uses spotify_parser.py to parse the response, which handles
-        structure discovery and change detection automatically.
-
-        Raises SpotifyError if:
-        - The API call fails
-        - The response looks suspiciously small compared to previous count
-        - The parser receives items but produces 0 tracks
         """
         all_items = []
         url = f"https://api.spotify.com/v1/playlists/{self.playlist_id}/items"
@@ -196,7 +228,6 @@ class SpotifyClient:
 
         log.info(f"Total raw items fetched: {len(all_items)}")
 
-        # Sanity check before parsing
         if len(all_items) == 0:
             raise SpotifyError(
                 "Spotify returned 0 items for the playlist. "
@@ -204,18 +235,14 @@ class SpotifyClient:
                 "This may be a temporary API issue."
             )
 
-        # Parse using the resilient parser
         try:
             tracks, warnings, structure_changed = parse_playlist_items(all_items)
         except ValueError as e:
             raise SpotifyError(str(e))
 
-        # Return warnings and structure change flag alongside tracks
-        # so the bot can alert the user
-        self._last_warnings        = warnings
+        self._last_warnings          = warnings
         self._last_structure_changed = structure_changed
 
-        # Sanity check: response should not be suspiciously small
         if previous_count and previous_count > 0:
             fraction = len(tracks) / previous_count
             if fraction < MIN_TRACK_FRACTION:

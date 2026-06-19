@@ -1,7 +1,7 @@
 """
 bot.py
 Main bot loop. Coordinates Spotify monitoring, Discord posting,
-activity scoring, and leaderboard management.
+activity scoring, leaderboard management, and song submission workflow.
 """
 
 import logging
@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from spotify_client import SpotifyClient, SpotifyError
+from spotify_client import SpotifyClient, SpotifyError, SpotifyTokenExpiredError
 from discord_client import DiscordClient, DiscordError
 from state_manager  import (
     load_state, save_state, load_backup_state,
@@ -21,8 +21,9 @@ from scoring      import (
     load_scores, save_scores, load_scanned, save_scanned,
     add_points, reset_weekly_scores, ScoreScanner, POINTS,
 )
-from leaderboard  import update_pinned_leaderboard, post_weekly_announcement
-from github_storage import setup_storage
+from leaderboard       import update_pinned_leaderboard, post_weekly_announcement
+from github_storage    import setup_storage
+from submission_manager import SubmissionManager
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -54,13 +55,19 @@ DROP_CRED_CHANNEL_ID  = os.environ.get("DROP_CRED_CHANNEL_ID",  "150559255690844
 CHALLENGES_CHANNEL_ID = os.environ.get("CHALLENGES_CHANNEL_ID", "")
 GUILD_ID              = os.environ.get("GUILD_ID", "")
 
+# Submission system (new)
+SUBMISSIONS_CHANNEL_ID = os.environ.get("SUBMISSIONS_CHANNEL_ID", "")
+PENDING_CHANNEL_ID     = os.environ.get("PENDING_CHANNEL_ID", "")
+TRUSTED_ROLE_ID        = os.environ.get("TRUSTED_ROLE_ID", "")
+APPROVER_DISCORD_ID    = os.environ.get("APPROVER_DISCORD_ID", "636545391973892098")
+
 EXCLUDED_CHANNEL_IDS  = {ALERTS_CHANNEL_ID}
 
 CHECK_INTERVAL        = int(os.environ.get("CHECK_INTERVAL", "600"))
-SCORE_SCAN_INTERVAL   = int(os.environ.get("SCORE_SCAN_INTERVAL", "1800"))  # 30 min
-SCAN_REQUEST_DELAY    = float(os.environ.get("SCAN_REQUEST_DELAY", "2.0"))  # seconds between Discord API calls during scan
+SCORE_SCAN_INTERVAL   = int(os.environ.get("SCORE_SCAN_INTERVAL", "1800"))
+SCAN_REQUEST_DELAY    = float(os.environ.get("SCAN_REQUEST_DELAY", "2.0"))
 GITHUB_REPO           = os.environ.get("GITHUB_REPO", "tichenor98-afk/definitive-drop-bot")
-LEADERBOARD_INTERVAL  = int(os.environ.get("LEADERBOARD_INTERVAL", "86400"))  # 24 hours
+LEADERBOARD_INTERVAL  = int(os.environ.get("LEADERBOARD_INTERVAL", "86400"))
 HEARTBEAT_INTERVAL    = 86400
 TOKEN_FILE            = "spotify_token.json"
 
@@ -103,7 +110,7 @@ def handle_added_song(track_id, track, discord, users, state, scores, scanned):
         discord.post_message(
             INTRODUCE_CHANNEL_ID,
             f"🎵 **{name}** by **{artist}** just landed on the playlist — nice pick!\n"
-            f"But who ARE you?! Spotify says `{spotify_id}` but that\'s not a name 😄\n"
+            f"But who ARE you?! Spotify says `{spotify_id}` but that's not a name 😄\n"
             f"Drop your name below so we can make it official!"
         )
 
@@ -187,7 +194,6 @@ def handle_removed_song(track_id, song_state, discord):
 
 
 def announce_badge(discord, display_name, new_badge):
-    """Post a badge achievement announcement."""
     try:
         discord.post_message(
             DROP_CRED_CHANNEL_ID,
@@ -223,6 +229,13 @@ def main():
         excluded_channel_ids = EXCLUDED_CHANNEL_IDS,
         request_delay        = SCAN_REQUEST_DELAY,
     )
+    submissions = SubmissionManager(
+        bot_token      = DISCORD_BOT_TOKEN,
+        spotify_client = spotify,
+        discord_client = discord,
+        user_lookup    = users,
+        playlist_id    = SPOTIFY_PLAYLIST_ID,
+    )
 
     # Startup checks
     try:
@@ -233,6 +246,19 @@ def main():
 
     try:
         spotify.refresh_access_token()
+    except SpotifyTokenExpiredError as e:
+        # Refresh token has expired — alert and exit cleanly
+        log.error(f"Spotify refresh token expired: {e}")
+        discord.post_to_alerts(
+            f"🔴 **ACTION REQUIRED — Spotify token expired**\n"
+            f"{e}\n\n"
+            f"Steps to fix:\n"
+            f"1. On your computer, run: `python get_spotify_token.py`\n"
+            f"2. Upload the new `spotify_token.json` to GitHub\n"
+            f"3. Railway will redeploy automatically\n\n"
+            f"The bot will not restart until the token is replaced."
+        )
+        sys.exit(1)
     except SpotifyError as e:
         log.error(f"Spotify token refresh failed: {e}")
         discord.post_to_alerts(f"⚠️ Bot failed to start: {e}")
@@ -249,9 +275,10 @@ def main():
     gh = setup_storage()
     if gh:
         log.info("GitHub storage configured. Pulling latest state files...")
-        gh.pull_file("drop_cred_scores.json",  "drop_cred_scores.json")
-        gh.pull_file("drop_cred_scanned.json", "drop_cred_scanned.json")
-        gh.pull_file("playlist_state.json",    "playlist_state.json")
+        gh.pull_file("drop_cred_scores.json",   "drop_cred_scores.json")
+        gh.pull_file("drop_cred_scanned.json",  "drop_cred_scanned.json")
+        gh.pull_file("playlist_state.json",     "playlist_state.json")
+        gh.pull_file("pending_submissions.json","pending_submissions.json")
         log.info("State files pulled from GitHub.")
     else:
         log.warning("GitHub storage not configured — state will not persist across redeployments.")
@@ -259,17 +286,36 @@ def main():
     scores  = load_scores()
     scanned = load_scanned()
 
+    # Load pending submissions
+    _load_pending_submissions(submissions, gh)
+
+    # Log submission system status
+    if SUBMISSIONS_CHANNEL_ID and PENDING_CHANNEL_ID:
+        log.info(
+            f"Submission system active. "
+            f"#song-submissions: {SUBMISSIONS_CHANNEL_ID}, "
+            f"#pending-approval: {PENDING_CHANNEL_ID}, "
+            f"Trusted role: {TRUSTED_ROLE_ID or 'not set'}"
+        )
+    else:
+        log.warning(
+            "Submission system not fully configured. "
+            "Set SUBMISSIONS_CHANNEL_ID and PENDING_CHANNEL_ID to enable."
+        )
+
     discord.post_to_alerts(
         f"✅ Bot started at {now_str()}\n"
         f"Checking playlist every {CHECK_INTERVAL // 60} min. "
-        f"Scanning activity every {SCORE_SCAN_INTERVAL // 60} min."
+        f"Scoring every {SCORE_SCAN_INTERVAL // 60} min. "
+        f"Submission system: {'active' if SUBMISSIONS_CHANNEL_ID else 'not configured'}."
     )
 
-    last_heartbeat      = time.time()
-    last_success_time   = time.time()
-    last_score_scan     = 0  # force immediate scan on startup
-    last_leaderboard    = 0  # force immediate leaderboard on startup
+    last_heartbeat       = time.time()
+    last_success_time    = time.time()
+    last_score_scan      = 0
+    last_leaderboard     = 0
     consecutive_failures = 0
+    current_tracks       = {}  # kept in sync for submission duplicate checks
 
     while True:
         # ── Spotify playlist check ────────────────────────────────────────────
@@ -279,6 +325,7 @@ def main():
 
             previous_count = len(state) if state else None
             tracks = spotify.get_playlist_tracks(previous_count=previous_count)
+            current_tracks = tracks  # keep reference for submission checks
 
             for warning in getattr(spotify, "_last_warnings", []):
                 discord.post_to_alerts(f"⚠️ Spotify parser warning: {warning}")
@@ -322,6 +369,20 @@ def main():
             last_success_time    = time.time()
             consecutive_failures = 0
 
+        except SpotifyTokenExpiredError as e:
+            # Token expired mid-run — alert and exit cleanly (do NOT retry)
+            log.error(f"Spotify refresh token expired during run: {e}")
+            discord.post_to_alerts(
+                f"🔴 **ACTION REQUIRED — Spotify token expired**\n"
+                f"{e}\n\n"
+                f"Steps to fix:\n"
+                f"1. On your computer, run: `python get_spotify_token.py`\n"
+                f"2. Upload the new `spotify_token.json` to GitHub\n"
+                f"3. Railway will redeploy automatically\n\n"
+                f"The bot is shutting down until the token is replaced."
+            )
+            sys.exit(1)
+
         except SpotifyError as e:
             consecutive_failures += 1
             log.error(f"Spotify error: {e}")
@@ -343,32 +404,39 @@ def main():
                 f"🚨 No successful check in 30+ minutes. Failures: {consecutive_failures}"
             )
 
+        # ── Song submission processing ─────────────────────────────────────────
+        if SUBMISSIONS_CHANNEL_ID and PENDING_CHANNEL_ID:
+            try:
+                submissions.check_new_submissions(GUILD_ID, current_tracks)
+                submissions.check_pending_reactions(current_tracks)
+                _save_pending_submissions(submissions, gh)
+            except Exception as e:
+                log.error(f"Submission system error: {e}", exc_info=True)
+                discord.post_to_alerts(f"⚠️ Submission system error: {e}")
+
         # ── Activity scoring scan ─────────────────────────────────────────────
         log.info(f"Scoring check: GUILD_ID={bool(GUILD_ID)}, time_since_scan={int(time.time() - last_score_scan)}s, interval={SCORE_SCAN_INTERVAL}s")
         if GUILD_ID and time.time() - last_score_scan > SCORE_SCAN_INTERVAL:
             try:
                 log.info("Scanning Discord activity for scoring...")
                 pe, be, unknown_ids = scanner.scan_all(
-                    guild_id             = GUILD_ID,
-                    forum_channel_id     = FORUM_CHANNEL_ID,
+                    guild_id              = GUILD_ID,
+                    forum_channel_id      = FORUM_CHANNEL_ID,
                     challenges_channel_id = CHALLENGES_CHANNEL_ID,
-                    scores               = scores,
-                    scanned              = scanned,
+                    scores                = scores,
+                    scanned               = scanned,
                 )
                 save_scores(scores)
                 save_scanned(scanned)
 
-                # Push updated scores to GitHub for persistence
                 if gh:
                     gh.push_file("drop_cred_scores.json",  "drop_cred_scores.json",  "Scoring scan complete")
                     gh.push_file("drop_cred_scanned.json", "drop_cred_scanned.json", "Scoring scan complete")
 
-                # Post badge announcements
                 for display_name, new_badge in be:
                     announce_badge(discord, display_name, new_badge)
                     time.sleep(1)
 
-                # Alert about unknown Discord users
                 for discord_id in unknown_ids:
                     discord.post_to_alerts(
                         f"⚠️ Unknown Discord user ID `{discord_id}` is active in the server.\n"
@@ -396,11 +464,39 @@ def main():
             discord.post_to_alerts(
                 f"💓 Bot heartbeat — {now_str()}\n"
                 f"Playlist: {len(state) if state else 0} songs. "
-                f"Scores tracked for {len(scores)} users."
+                f"Scores tracked for {len(scores)} users. "
+                f"Pending submissions: {len(submissions.pending)}."
             )
             last_heartbeat = time.time()
 
         time.sleep(CHECK_INTERVAL)
+
+
+# ── Pending submission persistence ────────────────────────────────────────────
+
+def _load_pending_submissions(submissions, gh):
+    """Load pending submissions from GitHub or local file."""
+    import json, os
+    filename = "pending_submissions.json"
+    if os.path.exists(filename):
+        try:
+            with open(filename) as f:
+                data = json.load(f)
+            submissions.load_pending(data)
+        except Exception as e:
+            log.warning(f"Could not load pending submissions: {e}")
+
+def _save_pending_submissions(submissions, gh):
+    """Save pending submissions to local file and optionally GitHub."""
+    import json
+    filename = "pending_submissions.json"
+    try:
+        with open(filename, "w") as f:
+            json.dump(submissions.dump_pending(), f, indent=2)
+        if gh and submissions.pending:
+            gh.push_file(filename, filename, "Update pending submissions")
+    except Exception as e:
+        log.warning(f"Could not save pending submissions: {e}")
 
 
 if __name__ == "__main__":
