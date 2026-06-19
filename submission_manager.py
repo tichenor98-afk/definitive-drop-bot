@@ -31,7 +31,7 @@ log = logging.getLogger("submissions")
 DISCORD_API = "https://discord.com/api/v10"
 
 # How far back to look for new submissions and pending reactions (seconds)
-SUBMISSION_LOOKBACK = 700   # slightly more than the 10-min check interval
+SUBMISSION_LOOKBACK = 3600  # look back 1 hour to catch submissions after restarts
 REACTION_POLL_AGE   = 86400 * 7  # keep polling pending messages for up to 7 days
 
 SPOTIFY_TRACK_RE = re.compile(
@@ -235,11 +235,15 @@ class SubmissionManager:
         Scan #song-submissions for new Spotify links and process them.
         Call this on every bot check cycle.
         """
+        log.info(f"Checking submissions channel {self.submissions_channel_id}...")
+
         if not self.submissions_channel_id:
             log.warning("SUBMISSIONS_CHANNEL_ID not set — skipping submission check.")
             return
 
         messages = self._get_recent_messages(self.submissions_channel_id, limit=50)
+        log.info(f"Fetched {len(messages) if messages else 0} messages from #song-submissions.")
+
         if not messages:
             return
 
@@ -258,16 +262,19 @@ class SubmissionManager:
 
             # Skip if we've already processed this message
             if self._already_processed(msg_id):
+                log.info(f"Skipping already-processed message {msg_id}")
                 continue
 
             # Only look at recent messages
             msg_age = self._message_age_seconds(timestamp)
+            log.info(f"Message {msg_id} age: {int(msg_age)}s (limit: {SUBMISSION_LOOKBACK}s)")
             if msg_age > SUBMISSION_LOOKBACK:
                 continue
 
             # Extract Spotify track link
             match = SPOTIFY_TRACK_RE.search(content)
             if not match:
+                log.info(f"Message {msg_id} has no Spotify track link.")
                 continue
 
             track_id = match.group(1)
