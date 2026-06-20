@@ -277,6 +277,7 @@ class SubmissionManager:
                 continue
 
             # Extract Spotify track link
+            log.info(f"Message {msg_id} raw content: {repr(content)}")
             match = SPOTIFY_TRACK_RE.search(content)
             if not match:
                 log.info(f"Message {msg_id} has no Spotify track link.")
