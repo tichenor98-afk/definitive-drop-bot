@@ -276,9 +276,16 @@ class SubmissionManager:
             if msg_age > SUBMISSION_LOOKBACK:
                 continue
 
-            # Extract Spotify track link
-            log.info(f"Message {msg_id} raw content: {repr(content)}")
-            match = SPOTIFY_TRACK_RE.search(content)
+            # Extract Spotify track link from content or embeds
+            # Discord sometimes moves URLs into embeds, clearing the content field
+            search_text = content
+            for embed in msg.get("embeds", []):
+                embed_url = embed.get("url", "")
+                if embed_url:
+                    search_text += " " + embed_url
+
+            log.info(f"Message {msg_id} search text: {repr(search_text)}")
+            match = SPOTIFY_TRACK_RE.search(search_text)
             if not match:
                 log.info(f"Message {msg_id} has no Spotify track link.")
                 continue
