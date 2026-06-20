@@ -24,7 +24,11 @@ import time
 
 import requests
 
-from discord_client import DiscordError
+# DiscordError imported conditionally to avoid import issues
+try:
+    from discord_client import DiscordError
+except ImportError:
+    DiscordError = Exception
 
 log = logging.getLogger("submissions")
 
@@ -235,6 +239,7 @@ class SubmissionManager:
         Scan #song-submissions for new Spotify links and process them.
         Call this on every bot check cycle.
         """
+        print(f"[submissions] check_new_submissions called. channel={self.submissions_channel_id}", flush=True)
         log.info(f"Checking submissions channel {self.submissions_channel_id}...")
 
         if not self.submissions_channel_id:
