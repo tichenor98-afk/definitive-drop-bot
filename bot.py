@@ -206,6 +206,7 @@ def announce_badge(discord, display_name, new_badge):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def main():
+    print("[bot] main() started — new code running", flush=True)
     log.info("=" * 60)
     log.info("Definitive Drop Playlist Bot starting...")
     log.info("=" * 60)
@@ -478,13 +479,17 @@ def _load_pending_submissions(submissions, gh):
     """Load pending submissions from GitHub or local file."""
     import json, os
     filename = "pending_submissions.json"
-    if os.path.exists(filename):
-        try:
+    try:
+        if os.path.exists(filename):
             with open(filename) as f:
                 data = json.load(f)
             submissions.load_pending(data)
-        except Exception as e:
-            log.warning(f"Could not load pending submissions: {e}")
+            log.info(f"Loaded {len(submissions.pending)} pending submissions.")
+        else:
+            log.info("No pending submissions file found — starting fresh.")
+    except Exception as e:
+        log.warning(f"Could not load pending submissions (non-fatal): {e}")
+        submissions.pending = {}
 
 def _save_pending_submissions(submissions, gh):
     """Save pending submissions to local file and optionally GitHub."""
