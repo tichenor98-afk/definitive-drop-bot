@@ -1,4 +1,4 @@
-"""
+""" 
 bot.py
 Main bot loop. Coordinates Spotify monitoring, Discord posting,
 activity scoring, leaderboard management, and song submission workflow.
