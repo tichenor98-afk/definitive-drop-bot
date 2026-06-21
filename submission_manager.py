@@ -35,7 +35,7 @@ log = logging.getLogger("submissions")
 DISCORD_API = "https://discord.com/api/v10"
 
 # How far back to look for new submissions and pending reactions (seconds)
-SUBMISSION_LOOKBACK = 3600  # look back 1 hour to catch submissions after restarts
+SUBMISSION_LOOKBACK = 7200  # look back 1 hour to catch submissions after restarts
 REACTION_POLL_AGE   = 86400 * 7  # keep polling pending messages for up to 7 days
 
 SPOTIFY_TRACK_RE = re.compile(
