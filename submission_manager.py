@@ -201,7 +201,7 @@ class SubmissionManager:
 
     def _add_to_playlist(self, track_id):
         """Add a track to the Spotify playlist. Returns True on success."""
-        url = f"https://api.spotify.com/v1/playlists/{self.playlist_id}/tracks"
+        url = f"https://api.spotify.com/v1/playlists/{self.playlist_id}/items"
         try:
             if not self.spotify.access_token:
                 self.spotify.refresh_access_token()
