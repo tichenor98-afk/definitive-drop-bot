@@ -9,13 +9,13 @@
     "badge": "\ud83c\udfa7 New Dropper"
   },
   "MHT": {
-    "total": 570,
-    "weekly": 570,
+    "total": 576,
+    "weekly": 576,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 192,
       "heart_given": 11,
-      "comment": 134,
+      "comment": 140,
       "heart_received": 9,
       "song_added": 224
     },
@@ -47,14 +47,14 @@
     "badge": "\ud83d\udd25 Drop Dealer"
   },
   "Brett Szudy": {
-    "total": 266,
-    "weekly": 266,
+    "total": 288,
+    "weekly": 288,
     "week_start": "2026-05-11T00:00:00+00:00",
     "breakdown": {
       "challenge_posted": 40,
-      "comment": 70,
+      "comment": 76,
       "heart_received": 12,
-      "song_added": 144
+      "song_added": 160
     },
     "badge": "\ud83d\udd25 Drop Dealer"
   },
